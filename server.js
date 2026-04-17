@@ -8,6 +8,22 @@ const app        = express();
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
+/* ── CORS — must be before all routes ───────────────────────────────────── */
+const SITE_URL = process.env.SITE_URL || 'https://scholarshub.pages.dev';
+app.use((req, res, next) => {
+  const origin  = req.headers['origin'];
+  const allowed = [SITE_URL, 'http://localhost:3000', 'http://localhost:5500', 'http://127.0.0.1:5500'];
+  if (origin && allowed.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Admin-Token');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 /* ── In-memory rate limiter ─────────────────────────────────────────────── */
 // Single unified store for all rate limiters. TTL eviction runs every 5 minutes
 // so the Map stays bounded to active-window entries rather than growing forever.
@@ -165,22 +181,6 @@ app.post('/api/send-welcome', requireAuth, rateLimit({ windowMs: 60000, max: 5, 
   }
 });
 
-
-/* ── CORS ───────────────────────────────────────────────────────────────── */
-const SITE_URL = process.env.SITE_URL || 'https://scholarshub.pages.dev';
-app.use((req, res, next) => {
-  const origin = req.headers['origin'];
-  const allowed = [SITE_URL, 'http://localhost:3000', 'http://localhost:5500', 'http://127.0.0.1:5500'];
-  if (origin && allowed.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Admin-Token');
-  res.setHeader('Access-Control-Max-Age', '86400');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
-  next();
-});
 
 /* ── Security headers ───────────────────────────────────────────────────── */
 app.use((req, res, next) => {
