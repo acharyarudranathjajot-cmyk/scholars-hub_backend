@@ -515,7 +515,7 @@ app.post('/api/submit',
           essayText, subject, wordCount, level,
           onProgress: (evt, msg) => { if (!_sseAborted) send('ai_' + evt, { message: msg }); }
         }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Analysis timed out after 120s')), 120_000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Analysis timed out after 55s')), 55_000))
       ]);
     } finally {
       if (_ticker) { clearInterval(_ticker); _ticker = null; }
