@@ -117,13 +117,6 @@ app.post('/api/validate-signup', signupRateLimit, (req, res) => {
   if (DISPOSABLE_DOMAINS.has(domain)) {
     return res.status(400).json({ error: 'Disposable email addresses are not permitted.' });
   }
-  // Owner bypass
-  if (clean === (process.env.OWNER_EMAIL || 'acharyarudranathjajot@gmail.com')) {
-    return res.json({ valid: true });
-  }
-  if (!isUniversityEmail(clean)) {
-    return res.status(400).json({ error: 'A university email address is required (.ac.uk or .edu).' });
-  }
   res.json({ valid: true });
 });
 
