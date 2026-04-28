@@ -8,19 +8,30 @@ const app        = express();
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
-/* ── CORS — must be before all routes ───────────────────────────────────── */
-const SITE_URL = process.env.SITE_URL || 'https://scholarshub.pages.dev';
+/* ── CORS ───────────────────────────────────────────────────────────────── */
+const ALLOWED_ORIGINS = [
+  'https://scholarshub.pages.dev',
+  'https://scholarshub.co.uk',
+  'https://www.scholarshub.co.uk',
+  'http://localhost:3000',
+  'http://127.0.0.1:5500'
+];
 app.use((req, res, next) => {
-  const origin  = req.headers['origin'];
-  const allowed = [SITE_URL, 'http://localhost:3000', 'http://localhost:5500', 'http://127.0.0.1:5500'];
-  if (origin && allowed.includes(origin)) {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
+  } else if (!origin) {
+    // Server-to-server or same-origin — allow
+    res.setHeader('Access-Control-Allow-Origin', '*');
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Admin-Token');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Max-Age', '86400');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
   next();
 });
 
@@ -117,6 +128,13 @@ app.post('/api/validate-signup', signupRateLimit, (req, res) => {
   if (DISPOSABLE_DOMAINS.has(domain)) {
     return res.status(400).json({ error: 'Disposable email addresses are not permitted.' });
   }
+  // Owner bypass
+  if (clean === 'acharyarudranathjajot@gmail.com') {
+    return res.json({ valid: true });
+  }
+  if (!isUniversityEmail(clean)) {
+    return res.status(400).json({ error: 'A university email address is required (.ac.uk or .edu).' });
+  }
   res.json({ valid: true });
 });
 
@@ -157,7 +175,7 @@ app.post('/api/send-welcome', requireAuth, rateLimit({ windowMs: 60000, max: 5, 
               <li>📌 Citation and referencing analysis</li>
             </ul>
             <div style="text-align:center;margin:28px 0;">
-              <a href="${SITE_URL}/dashboard.html"
+              <a href="https://scholarshub.pages.dev/dashboard.html" 
                  style="background:#00A896;color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;display:inline-block;">
                 Go to My Dashboard →
               </a>
@@ -508,7 +526,7 @@ app.post('/api/submit',
           essayText, subject, wordCount, level,
           onProgress: (evt, msg) => { if (!_sseAborted) send('ai_' + evt, { message: msg }); }
         }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Analysis timed out after 55s')), 55_000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Analysis timed out after 120s')), 120_000))
       ]);
     } finally {
       if (_ticker) { clearInterval(_ticker); _ticker = null; }
@@ -553,7 +571,7 @@ app.post('/api/submit',
               </div>
               <p style="color:#334155;font-size:16px;">View your full report with detailed feedback, citation analysis, and improvement tips.</p>
               <div style="text-align:center;margin:28px 0;">
-                <a href="${SITE_URL}/report.html?id=${submissionId}"
+                <a href="https://scholarshub.pages.dev/report.html?id=${submissionId}" 
                    style="background:#00A896;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">
                   View Full Report →
                 </a>
@@ -930,7 +948,7 @@ app.post('/api/admin/reset-password', async (req, res) => {
       html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px;">
         <h2 style="color:#0F1B3C;">Password Reset Request</h2>
         <p>An admin has requested a password reset for your account.</p>
-        <p>Please visit <a href="${SITE_URL}/login.html">Scholars Hub Login</a> and use the "Forgot password" link to set a new password.</p>
+        <p>Please visit <a href="https://scholarshub.pages.dev/login.html">Scholars Hub Login</a> and use the "Forgot password" link to set a new password.</p>
         <p style="color:#94a3b8;font-size:13px;">Scholars Hub · Awrex Ltd</p>
       </div>`
     });
@@ -997,7 +1015,7 @@ app.post('/api/admin/broadcast', rateLimit({ windowMs: 3600000, max: 5, prefix: 
     // VULN#5: HTML-escape message before converting newlines — prevents HTML/script injection in emails
     const escapeHtml = s => s.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#x27;'}[c]));
     const messageHtml = escapeHtml(message).replace(/\n/g, '<br>');
-    const unsubBase   = SITE_URL;
+    const unsubBase   = process.env.SITE_URL || 'https://scholarshub.pages.dev';
 
     // Send in parallel batches of 50 (safe within Resend rate limits)
     const BATCH = 50;
@@ -1099,7 +1117,7 @@ app.post('/api/send-receipt', requireAuth, rateLimit({ windowMs: 3600000, max: 1
             <p style="margin:0;font-size:13px;color:#374151"><strong>Supplier:</strong> Awrex Ltd · 42A St Pauls Road, Peterborough, PE1 3DW · Company No. 16491375</p>
           </div>
 
-          <a href="${SITE_URL}/dashboard.html" style="display:block;background:#00A896;color:#fff;text-align:center;padding:14px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px">Go to Your Dashboard →</a>
+          <a href="https://scholarshub.pages.dev/dashboard.html" style="display:block;background:#00A896;color:#fff;text-align:center;padding:14px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px">Go to Your Dashboard →</a>
 
           <p style="font-size:12px;color:#94a3b8;text-align:center;margin-top:24px">Keep this email as your record of purchase. For billing queries email <a href="mailto:info@scholarshub.co.uk" style="color:#00A896">info@scholarshub.co.uk</a></p>
         </div>
@@ -1126,7 +1144,7 @@ app.post('/api/subscribe', rateLimit({ windowMs: 3600000, max: 3, prefix: 'subsc
       subscribed_at: new Date().toISOString()
     }).catch(err => console.error('[subscribe] DB insert failed:', err.message));
 
-    const unsubUrl = `${SITE_URL}/api/unsubscribe?token=${unsubToken}`;
+    const unsubUrl = `${process.env.SITE_URL || 'https://scholarshub.pages.dev'}/api/unsubscribe?token=${unsubToken}`;
 
     // Send confirmation email with unsubscribe link (PECR compliant)
     await sendEmail({
@@ -1174,15 +1192,10 @@ app.use('/api', (req, res, next) => {
 });
 
 /* ── SPA fallback ───────────────────────────────────────────────────────── */
-app.get('*', (req, res) => res.status(404).json({ error: 'Not found.' }));
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 // PERF-2: require ai-engine at startup — avoids module resolution on first submission request
 const { analyseEssay } = require('./js/ai-engine');
 
-// Vercel serverless export — also supports traditional listen for other hosts
-if (require.main === module) {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => console.log('ScholarsHub running on port ' + PORT));
-}
-module.exports = app;
-
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log('ScholarsHub running on port ' + PORT));
